@@ -1,117 +1,70 @@
-use std::io;
-use genpdf::{elements, style};
-use genpdf::Element;
+use printpdf::*;
+use std::fs::File;
+use std::io::{BufWriter, Write};
+use text_io::read;
 
-struct Student {
-    name: String,
-    total_marks: f32,
-    num_subjects: u32,
+fn calculate_average(total_marks: f64, subjects: u32) -> f64 {
+    total_marks / subjects as f64
 }
 
-impl Student {
-    fn average(&self) -> f32 {
-        self.total_marks / self.num_subjects as f32
-    }
-
-    fn grade(&self) -> &'static str {
-        let avg = self.average();
-        if avg >= 90.0 {
-            "A"
-        } else if avg >= 75.0 {
-            "B"
-        } else if avg >= 60.0 {
-            "C"
-        } else {
-            "D"
-        }
+fn assign_grade(avg: f64) -> &'static str {
+    if avg >= 90.0 {
+        "A"
+    } else if avg >= 75.0 {
+        "B"
+    } else if avg >= 60.0 {
+        "C"
+    } else {
+        "D"
     }
 }
 
 fn main() {
-    let mut name = String::new();
-    let mut total_marks = String::new();
-    let mut num_subjects = String::new();
+    println!("Enter student name:");
+    let name: String = read!("{}\n");
 
-    println!("Enter Student Name:");
-    io::stdin().read_line(&mut name).unwrap();
+    println!("Enter total marks:");
+    let total_marks: f64 = read!();
 
-    println!("Enter Total Marks:");
-    io::stdin().read_line(&mut total_marks).unwrap();
+    println!("Enter number of subjects:");
+    let subjects: u32 = read!();
 
-    println!("Enter Number of Subjects:");
-    io::stdin().read_line(&mut num_subjects).unwrap();
+    let average = calculate_average(total_marks, subjects);
+    let grade = assign_grade(average);
 
-    let student = Student {
-        name: name.trim().to_string(),
-        total_marks: total_marks.trim().parse().unwrap_or(0.0),
-        num_subjects: num_subjects.trim().parse().unwrap_or(1),
-    };
+    println!("\n--- Student Report ---");
+    println!("Name: {}", name);
+    println!("Total Marks: {}", total_marks);
+    println!("Subjects: {}", subjects);
+    println!("Average: {:.2}", average);
+    println!("Grade: {}", grade);
 
-    let average = student.average();
-    let grade = student.grade();
-
-    println!("\n--- Report Card ---");
-    println!("Name       : {}", student.name);
-    println!("Average    : {:.2}", average);
-    println!("Grade      : {}", grade);
-
-    generate_pdf_report(&student, average, grade);
-    println!("\nPDF generated: report_card.pdf");
+    generate_pdf(&name, total_marks, subjects, average, grade);
+    println!("PDF Report card generated as report_card.pdf");
 }
 
-fn generate_pdf_report(student: &Student, average: f32, grade: &str) {
-    let font_family = genpdf::fonts::from_files(
-        "./fonts",              
-        "LiberationSans",       
-        None,                   
-    ).expect("Failed to load font");
+fn generate_pdf(name: &str, marks: f64, subjects: u32, avg: f64, grade: &str) {
+    let (doc, page1, layer1) = PdfDocument::new("Report Card", Mm(210.0), Mm(297.0), "Layer 1");
 
-    let mut doc = genpdf::Document::new(font_family);
-    doc.set_title("Report Card");
+    let current_layer = doc.get_page(page1).get_layer(layer1);
 
-    let mut decorator = genpdf::SimplePageDecorator::new();
-    decorator.set_margins(10);
-    doc.set_page_decorator(decorator);
+    let font = doc.add_builtin_font(BuiltinFont::Helvetica).unwrap();
 
-    let heading = elements::Paragraph::new("Student Report Card")
-        .styled(style::Style::new().bold().with_font_size(20));
+    let lines = vec![
+        format!("--- Student Report Card ---"),
+        format!("Name: {}", name),
+        format!("Total Marks: {}", marks),
+        format!("Subjects: {}", subjects),
+        format!("Average: {:.2}", avg),
+        format!("Grade: {}", grade),
+    ];
 
-    let mut table = elements::TableLayout::new(vec![1, 2]);
-    table.set_cell_decorator(elements::FrameCellDecorator::new(true, true, false));
+    let mut y = 270.0;
+    for line in lines {
+        current_layer.use_text(line, 14.0, Mm(20.0), Mm(y), &font);
+        y -= 10.0;
+    }
 
-    table.row()
-        .element(elements::Paragraph::new("Name"))
-        .element(elements::Paragraph::new(&student.name))
-        .push()
+    doc.save(&mut BufWriter::new(File::create("report_card.pdf").unwrap()))
         .unwrap();
-
-    table.row()
-        .element(elements::Paragraph::new("Total Marks"))
-        .element(elements::Paragraph::new(format!("{:.2}", student.total_marks)))
-        .push()
-        .unwrap();
-
-    table.row()
-        .element(elements::Paragraph::new("Subjects"))
-        .element(elements::Paragraph::new(student.num_subjects.to_string()))
-        .push()
-        .unwrap();
-
-    table.row()
-        .element(elements::Paragraph::new("Average"))
-        .element(elements::Paragraph::new(format!("{:.2}", average)))
-        .push()
-        .unwrap();
-
-    table.row()
-        .element(elements::Paragraph::new("Grade"))
-        .element(elements::Paragraph::new(grade))
-        .push()
-        .unwrap();
-
-    doc.push(heading);
-    doc.push(elements::Break::new(1));
-    doc.push(table);
-
-    doc.render_to_file("report_card.pdf").expect("Failed to write PDF");
 }

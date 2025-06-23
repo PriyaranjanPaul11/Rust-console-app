@@ -6,5 +6,3 @@ edition = "2024"
 [dependencies]
 printpdf = "0.3.4"
 text_io = "0.1.8"
-
-genpdf = "0.2.0-alpha.1"
